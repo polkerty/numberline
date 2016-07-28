@@ -1,0 +1,679 @@
+<html>
+<head>
+
+<title>Explore the Number Line</title>
+
+<script type="text/javascript" src="jquery.js" ></script>
+<script type="text/javascript" >
+
+Array.prototype.place = function(num) {
+
+var ret = [], placed = false;
+
+for ( var i=0; i<this.length; i++ ) {
+
+if ( this[i]<num || placed ) ret.push(this[i]);
+else { 
+	if (num!=this[i]) ret.push(num);
+	ret.push(this[i]);
+	placed = true;
+}
+
+
+}
+if (!ret.length) ret.push(num);
+if ( num > this[ this.length-1 ] ) ret.push (num);
+
+return ret;
+
+}
+
+Array.prototype.unplace = function(num) {
+
+var ret = [];
+
+for ( var i=0; i<this.length; i++ )
+	if ( this[i] != num ) ret.push( this[i] );
+
+return ret;
+
+}
+
+Array.prototype.sum = function(num) {
+
+var ret = 0;
+
+for ( var i=0; i<this.length; i++ )
+	ret += this[i];
+
+return ret;
+
+}
+
+var Numbers = { collection: [], ideas:{list:[],desc:[],searchLim:10} };
+var Display = { staticLineWidth:600, min:-10, max:10, lineJump:1, lineTicks:21, scroll:{speed:50} };
+
+Numbers.rand = function(a,b){
+
+return Math.floor(Math.random()*(b-a+1))+a;
+
+}
+
+Numbers.feature = function( num ) {
+
+Display.scrollTo( num, Display.scroll.speed );
+
+}
+
+Numbers.center = function ( num ) {
+
+var min = num - Math.floor((Display.lineTicks - 1)/2);
+var max = num + Math.floor((Display.lineTicks - 1)/2);
+
+Display.renderLine( min, max );
+
+}
+
+Numbers.process = function( num) {
+
+if ( Numbers.collection.indexOf(num) > -1  ) { //owned
+
+Numbers.collection = Numbers.collection.unplace( num );
+
+
+}
+
+else { //unowned
+
+Numbers.collection = Numbers.collection.place( num );
+Numbers.ideas.list = Numbers.ideas.list.unplace( num ); //can't have it in two places!
+
+}
+
+Numbers.fillCollection(); 
+Numbers.fillSuggestions(); 
+Display.renderLine();
+
+}
+
+Numbers.fillCollection = function() {
+
+var html = "";
+
+for ( var i=0; i<Numbers.collection.length; i++ ) {
+
+html += "<div class='favnum-box' onclick='Numbers.feature(" + Numbers.collection[i] + ")' >" + Numbers.collection[i] + "</div>";
+
+}
+
+html=html.length?html:"<span class='box-empty' >(empty)</span>";
+
+$("#collection-wrap").html(html);
+
+}
+
+Numbers.fillSuggestions = function() {
+
+$("body").removeClass("s");
+var html = "<div id='recommendation-wrap' >";
+
+html+="</div><div class='favnum-box' id='ideas' onclick='oeis.fetch();' >What does my collection mean?</div>";
+
+$("#RECOMMENDATION").html(html);
+
+}
+
+Display.advanceLine = function() {
+Display.renderLine(Display.min+Display.lineJump, Display.max+Display.lineJump);
+
+}
+
+Display.retreatLine = function() {
+Display.renderLine(Display.min-Display.lineJump, Display.max-Display.lineJump);
+
+}
+
+Display.renderLine = function( min,max ) {
+
+if (min == undefined) min = Display.min;
+if (max == undefined) max = Display.max;
+
+var tot = Display.lineTicks;
+
+var html = "<table id='line-render-table' >";
+Display.min = min;
+Display.max = max;
+Display.itemWidth = Math.floor(Display.staticLineWidth/tot/2) + "px";
+
+
+html += "<tr id='line-render-topdash' >";
+
+for (var i=0; i<(tot+1)*2; i++) {
+
+var _class = (i>0 && i/2==Math.floor(i/2))?"line-mark":"";
+html += "<td class="+_class+"></td>";
+
+}
+
+html += "</tr>";
+
+html += "<tr id='line-render-botdash' >";
+
+for (var i=0; i<(tot+1)*2; i++) {
+
+var _class = (i>0 && i/2==Math.floor(i/2))?"line-mark":"";
+html += "<td class="+_class+"></td>";
+
+}
+
+html += "</tr>";
+
+html += "<tr id='line-render-num' ><td></td>";
+
+var middle =(max+min)/2;
+var icenter = (tot-1)/2;
+
+for (var i=0; i<(tot); i++) {
+
+var distance = icenter - i;
+var text = (middle - distance*Display.lineJump);
+var _class = (Numbers.collection.indexOf(text) > -1)?" collection":"";
+html += "<td colspan='2' class='number" + _class + "' onclick='Numbers.process(" + (text) + ")' >" + text + "</td>";
+
+}
+
+html += "</tr>";
+
+html += "</table>";
+
+$("#line").html(html);
+
+$("#line-render-table #line-render-botdash td").css("min-width",Display.itemWidth);
+$("#line-render-table #line-render-botdash td").css("max-width",Display.itemWidth);
+
+}
+
+Display.scrollTo = function( num, sec ) {
+
+if (!sec) sec=Display.scroll.speed;
+if (num == Infinity) return;
+
+Display.scroll.busy = true;
+Display.scroll.cur = (Display.max + Display.min)/2;
+
+//If the number does not actually appear on the numberline due to the scale, we go as close as possible 
+//(Display.scroll.goal) and then center the numberline at the actual number (Display.scroll.realGoal).
+Display.scroll.goal = Display.scroll.cur+Math.floor((num-Display.scroll.cur)/Display.lineJump)*Display.lineJump
+Display.scroll.realGoal = num;
+
+var dis = Display.scroll.cur - Display.scroll.goal;
+if (dis!=0) {
+
+Display.scroll.direction = ( dis>0)?-1:1;
+
+Display.scroll.timePer = Math.floor((sec/dis)*Display.lineJump);
+
+Display.scroll.move();
+
+}
+
+}
+
+Display.scroll.move = function() {
+
+if (Display.scroll.cur != Display.scroll.goal ) {
+
+clearTimeout(Display.scroll.timer);
+Display.scroll.timer = setTimeout( "Display.scroll.move()", Display.scroll.timePer );
+
+Display.scroll.cur += (Display.scroll.direction*Display.lineJump);
+Display.max += (Display.scroll.direction*Display.lineJump);
+Display.min += (Display.scroll.direction*Display.lineJump);
+
+Numbers.center(Display.scroll.cur);
+
+}
+
+else {
+
+clearTimeout(Display.scroll.timer);
+Display.scroll.busy= false;
+var tickOuts = (Display.lineTicks-1)/2;
+
+Display.max = Display.lineJump*tickOuts + Display.scroll.goal;
+Display.min = -Display.lineJump*tickOuts + Display.scroll.goal;
+
+Numbers.center(Display.scroll.realGoal);
+
+}
+
+}
+
+function AJAX ( url, callback, variable, method, async, fn ) {
+			
+if ( !url ) return;
+if ( !callback ) callback = function(){};
+if ( !method ) method = "GET";
+if (!async ) async = true;
+
+var x;
+			
+if (window.XMLHttpRequest)
+x=new XMLHttpRequest();
+else
+x=new ActiveXObject("Microsoft.XMLHTTP");
+  					
+x.onreadystatechange=function(){
+			
+if (x.readyState==4 && x.status==200)
+if ( !fn || fn(x.responseText) ) callback(x.responseText, variable);
+  				
+}
+  			
+x.open( method,url,async );
+x.send();	
+}
+
+oeis = {url:"http://oeis.org/search?fmt=short&q="};
+oeis.fetch = function () {
+
+var seq = Numbers.collection.join(","), seq2 = Numbers.collection.join(" ");
+var url = oeis.url + seq, url2 = oeis.url + seq2;
+
+Display.wait.go("#ideas","Looking up...");
+
+var callback = function(ret, dat) {
+
+var show = oeis.parse(ret); 
+
+if (show != '<table width="100%" cellspacing="0" cellpadding="0" border="0">undefined') {
+$("#recommendation-wrap").html(show);
+$("#ideas").html("What does my collection mean?");
+$("body").addClass("s");
+}
+
+else {
+
+var callback2 = function( ret ) {
+
+var show = oeis.parse(ret); 
+
+$("#ideas").html("What does my collection mean?");
+
+if (show != '<table width="100%" cellspacing="0" cellpadding="0" border="0">undefined') {
+$("#recommendation-wrap").html(show);
+$("body").addClass("s");
+
+}
+
+else alert("No matches!");
+
+
+}
+
+AJAX( dat[0],callback2 );
+
+
+}
+
+}
+
+
+
+AJAX( url, callback, [url2,seq2] );
+
+}
+
+oeis.parse = function(html) {
+
+var arr = html.split('<table width="100%" cellspacing="0" cellpadding="0" border="0">');
+html = "";
+for  (var i=2; i<3; i++ ) {
+html+= '<table width="100%" cellspacing="0" class="sigbox" cellpadding="0" border="0">' + arr[i];
+
+}
+
+return html;
+}
+
+Display.wait = {};
+
+Display.wait.go = function( loc, text ) {
+
+$(loc).html("<div class='spinner' ></div>"+"<span style='float:left;' >&nbsp;&nbsp;&nbsp;" + text + "</span>");
+
+}
+
+
+Display.clear = function() {
+
+Numbers.collection = [];
+Numbers.fillCollection();
+Numbers.fillSuggestions();
+Numbers.center(0);
+
+}
+
+var modal = {};
+modal.show = function( id ) {
+
+$(".modalBox").hide();
+$("#modal").fadeIn();
+$("#"+id).show();
+
+
+}
+
+modal.hide = function( id ) {
+
+$(".modalBox").hide();
+$("#modal").fadeOut();
+
+
+}
+
+$(document).ready(function(){
+
+Display.renderLine(-10,10);
+Numbers.fillCollection(); //puts message
+Numbers.fillSuggestions(); //puts button
+
+// button prep
+$("#line-left").click(function() { Display.retreatLine(); });
+$("#line-right").click(function() { Display.advanceLine(); });
+
+//modal
+$(".modalBox .x").click(function(){ modal.hide(); });
+
+});
+
+</script>
+<style type="text/css" >
+
+body { font-size:10pt; margin:0; }
+body * { font:arial !important; text-shadow:1px 1px 1px white; }
+#wrap {background:white; width:800px; margin-left:auto; margin-right:auto; min-height:100%; border-left:2px solid #eee; border-right:2px solid #eee; padding:15px; }
+#shade { position:fixed; left:0; top:0; z-index:-1; width:100%; height:100%; background:#fafafa; }
+#head { position:absolute; left:0px; top:0px; background:#fafafa; width:100%; text-align:center; }
+#head h1 { margin-bottom:0px;display:inline-block;}
+#head h2 { margin-top:0px;display:inline-block; }
+.spinner {float:left; background-color:transparent;
+width:25px;
+height:25px;
+border:0px solid black;
+background-image:url(data:image/gif;base64,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);}
+
+.line-button {text-align:center; font-size:14pt; width:20px; border:1px solid #ccc; cursor:pointer; padding:8px; background: #eee; /* Old browsers */
+background: -moz-linear-gradient(top, #fafafa 0%, #eee 100%); /* FF3.6+ */
+background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#fafafa), color-stop(100%,#eee)); /* Chrome,Safari4+ */
+background: -webkit-linear-gradient(top, #fafafa 0%,#eee 100%); /* Chrome10+,Safari5.1+ */
+background: -o-linear-gradient(top, #fafafa 0%,#eee 100%); /* Opera11.10+ */
+background: -ms-linear-gradient(top, #fafafa 0%,#eee 100%); /* IE10+ */
+filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#fafafa', endColorstr='#eee',GradientType=0 ); /* IE6-9 */
+background: linear-gradient(top, #fafafa 0%,#eee 100%); /* W3C */
+-webkit-transition: background .2s;
+}
+.line-button:hover { background:#eee; }
+.line-button:active { background:#ddd; box-shadow:2px 2px 2px #ccc inset; }
+
+#line-wrap { width:100%; }
+#line-render-table { width:100%; border-spacing:0px; }
+#line-render-topdash td { border-bottom:2px solid black; }
+.line-mark { border-left:1px solid black; height:8px; }
+#line-render-num td { text-align:center; font-size:8pt; cursor:pointer; }
+#line-render-num td:hover { text-decoration:underline; }
+#line-render-num td:active { color:darkred; }
+
+#NUMBERLINE { font-family:times; position:absolute; width:100%; left:0; top:70; background:white; padding-top:45px; padding-bottom:0px; border-top:1px solid #eee; border-bottom:1px solid #eee; box-shadow:-2px -2px 2px #ddd; }
+#line-wrap { width:800px; margin-left:auto; margin-right:auto; }
+
+.favnum-box { font-family:times; color:black; text-shadow:1px 1px 1px white; border-radius:2px 2px; display:inline-block; text-align:center; 
+font-size:14pt; min-width:20px; border:1px solid #ccc; cursor:pointer !important; padding:8px; background: #eee; /* Old browsers */
+background: -moz-linear-gradient(top, #fafafa 0%, #eee 100%); /* FF3.6+ */
+background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#fafafa), color-stop(100%,#eee)); /* Chrome,Safari4+ */
+background: -webkit-linear-gradient(top, #fafafa 0%,#eee 100%); /* Chrome10+,Safari5.1+ */
+background: -o-linear-gradient(top, #fafafa 0%,#eee 100%); /* Opera11.10+ */
+background: -ms-linear-gradient(top, #fafafa 0%,#eee 100%); /* IE10+ */
+filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#fafafa', endColorstr='#eee',GradientType=0 ); /* IE6-9 */
+background: linear-gradient(top, #fafafa 0%,#eee 100%); /* W3C */
+-webkit-transition: background .2s; box-shadow:2px 2px 2px #eee; margin-right:5px; margin-bottom:5px; }
+.favnum-box:hover { background:#eee; box-shadow:0px 0px 0px black; }
+.favnum-box:active { background:#ddd; box-shadow:2px 2px 2px #ccc inset; }
+#ideas { width:96%; }
+
+.box { padding:5px; border:1px solid #ccc; box-shadow:2px 2px 2px #eee inset; min-height:0px; background:url(bg.png); }
+.ltbox { border:1px solid #ccc; }
+.box .box-empty { color:#aaa; font-weight:bold; font-size:12pt; }
+#collection-wrap { }
+.number.collection { background:#2bf; color:white; text-shadow:none; font-weight:bold; }
+
+#line-controls { padding:10px; border-top:1px solid #ccc; box-shadow:2px 2px 2px #ddd inset; margin-top:45px;background:ghostwhite;}
+#line-controls-inner { width:300px; margin-left:auto; margin-right:auto; }
+#line-controls input { padding:5px; width:60px; border:1px solid #eee; }
+
+::selection { background-color:transparent; }
+
+#line * { cursor:text; }
+#vertical-space { height:250px; }
+
+.explanation { background:#eee; font-size:10pt; font-family:arial; color:#666; border-radius:3px; padding:3px; display:block; }
+#cols td { max-width:50%; min-width:50%; vertical-align:top; }
+
+#cols h2 { font-size:20; }
+
+#notes { font-size:8pt; }
+
+#cite { color:#888; position:fixed; text-align:center; font-size:10pt; bottom:0; left:40%; width:20%; box-shadow:#eee 0px -1px 2px; border:1px solid #eee; background:ghostwhite; padding:10px; border-radius:2px 2px 0px 0px;  }
+#oeisbox { }
+#cite a { color:black; text-decoration:none; }
+#cite a:hover { text-decoration:underline; }
+
+#equals { vertical-align:bottom !important; font-size:40pt;  }
+
+#recommendation-wrap .sigbox { border:0px solid black; border-top:1px solid #ccc; padding:5px; }
+
+body.s #RECOMMENDATION {position:absolute; left:0px; top:410px; width:100%; margin-left:auto; margin-right:auto; background:transparent; padding-top:30px; padding-bottom:30px; }
+body.s #recommendation-wrap {width:800px; margin-left:auto; margin-right:auto; box-shadow:0px 2px 2px #eee; }
+body.s #ideas {width:15%; margin-left:auto; margin-right:auto; position:fixed; left:0; top:450px;display:none; }
+body.s .sigbox { border:1px solid #ccc; margin-top:0px; }
+body #clr { display:none; }
+body.s #clr { display:block; position:absolute; right:1%; width:15%; top:265px; padding-top:70px; padding-bottom:70px; }
+body.s .hide-s { display:none; }
+body.s #equals {width:500px; text-align:center; font-size:50pt; }
+
+#modal { z-index:3; width:100%; height:100%; background-color:black; opacity:0.1; filter:Alpha(opacity=0.1); position:fixed; top:0; left:0; display:none; }
+.modalBox { overflow:scroll; display:none; z-index:4; width:60%; position:fixed; left:20%; top:20%;  height:60%; opacity:1; background-color:white; border:1px solid #ccc; border-radius:3px; box-shadow:2px 2px 2px #aaa; }
+.modalBox .head { padding:10px; background:ghostwhite; box-shadow:0px 2px 2px #eee; font-weight:bold;}
+.modalBox .content { padding:15px; }
+.modalBox table { width:100%; }
+.modalBox .r { float:right; }
+.modalBox .x { margin-right:-23px; }
+</style>
+</head>
+<body>
+
+<div id="shade"></div>
+<div id="wrap" >
+
+<div id="head" >
+<h1>Explore the Number Line&mdash;</h1>
+
+<h2>All the Numbers in the World</h2>
+</div>
+<div id="content" >
+<div id="NUMBERLINE" >
+<table id='line-wrap' >
+<tr>
+<td id='line-left' class='line-button' >&lsaquo;</td>
+<td id="line" ></td>
+<td id='line-right' class='line-button' >&rsaquo;</td>
+</tr>
+</table>
+
+<div id='line-controls' >
+<div id="line-controls-inner" >
+
+<script type='text/javascript' >
+
+Display.controlAlign = {
+
+goTo: function( el ) {
+
+var a = Math.floor(el.value);
+Display.scrollTo(a);
+
+},
+
+lineJump: function( el ) {
+
+var a = Math.floor(el.value);
+if (a<1) a = 1;
+Display.lineJump = a;
+
+var middle =(Display.max+Display.min)/2;
+var tickOuts = (Display.lineTicks-1)/2;
+
+Display.min = middle - tickOuts*Display.lineJump;
+Display.max = middle + tickOuts*Display.lineJump;
+
+Display.renderLine();
+
+}
+
+};
+
+(function(){ 
+
+var html = "<label for='line-go' >Go to: </label><input type='number' id='line-go' value='" + (Display.min + Display.max)/2
+	+ "' /><label for='line-jump' >Scale: 1 tick = </label><input type='number' id='line-jump' value='"
+	+ Display.lineJump + "' />";
+
+document.write(html);
+
+})();
+
+
+$(document).ready(function(){
+
+$("#line-go").keyup(function() {
+
+Display.controlAlign.goTo(this);
+
+});
+
+$("#line-go").change(function() {
+
+Display.controlAlign.goTo(this);
+
+});
+
+$("#line-jump").keyup(function() {
+
+Display.controlAlign.lineJump(this);
+
+});
+
+$("#line-jump").change(function() {
+
+Display.controlAlign.lineJump(this);
+
+});
+
+});
+
+
+</script>
+
+</div>
+</div>
+
+</div>
+
+<div id="vertical-space" ></div>
+
+<table id='cols' >
+<tr>
+<td>
+<h2>Collection</h2>
+<div class='explanation' >
+Click on a number above to add it to your collection.
+</div>
+</td>
+
+<td id='equals' rowspan='2' >=</td>
+
+<td class='hide-s'>
+<h2>Significance</h2>
+<div class='explanation' >
+Your numbers are probably related by a simple underlying formula. What is it?
+</div>
+</td>
+</tr>
+
+<tr>
+<td>
+<div id="FAVORITES" >
+<div id="collection-wrap" class='box' ></div>
+</div>
+
+</td>
+
+<td>
+<div id="RECOMMENDATION" >
+<div id="recommendation-wrap" class='box' ></div>
+</div>
+<button id='clr' class='favnum-box' onclick='Display.clear();' >Clear</button>
+
+</td>
+
+</tr>
+
+</table>
+
+</div>
+
+</div>
+
+<div id="cite" >
+powered by <a href='http://oeis.org' ><img src="http://oeis.org/oeis_logo.png" width="15px" height="15px" id="oeisimg" /></a>
+<a href='http://oeis.org' >OEIS</a> |
+<a href='javascript:modal.show("about")' >About</a>
+</div>
+
+<div id="modal" ></div>
+<div id='about' class='modalBox' >
+<div class='head' >
+<table>
+<tr>
+<td>About This Applet</td>
+<td class="r" ><button class='favnum-box x' >x</button></td>
+</tr>
+</table>
+</div>
+
+<div class='content' >
+
+<p>"Explore the Number Line" was designed as an outlet for numerophiles (number lovers), and doubles as therapy
+for numerophobics (number fearers). You start by simply walking down the number line 
+in either direction as long as you want. You can easily change the scale of the graph,
+and you can visit any number by typing its name in the box. Make friends with numbers.
+
+<p>This applet lets you get acquainted with the numbers in a whole new way, however. You can click on any you want
+to keep, and they will go live in your Collection. Then, you can click the button "What does my collection mean?"
+and the applet will tell you the relationship between your numbers!
+
+<p>This connection is found by querying <a href='http://oeis.org' >OEIS.org</a>, home of the 
+Online Encyclopedia of Integer Sequences, which houses
+hundreds of thousands of integer sequences along with many more details.
+
+<p>Enjoy!
+
+<p><small>Copyright &copy; 2014 <a href='http://knomatic.net' >KnoMatic Learning Management Systems</a></small>
+
+</div>
+
+
+</div>
+
+</body>
+</html>
